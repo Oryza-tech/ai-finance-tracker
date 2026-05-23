@@ -71,35 +71,57 @@ export async function POST(req) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    // --- MODUL RTC (REAL TIME CLOCK) ZONA WIB ---
-    // Vercel menggunakan waktu UTC, jadi kita kalibrasi ke WIB (UTC+7)
+    // --- MODUL RTC (REAL TIME CLOCK) & DATE CALCULATION ---
     const now = new Date();
     const wibOffset = 7 * 60 * 60 * 1000; 
-    const wibDate = new Date(now.getTime() + wibOffset);
-    const todayString = wibDate.toISOString().split('T')[0]; // Hasil: YYYY-MM-DD
-    // --------------------------------------------
+    const today = new Date(now.getTime() + wibOffset);
+    
+    // Fungsi bantu untuk format YYYY-MM-DD
+    const formatDate = (date) => date.toISOString().split('T')[0];
+    const todayString = formatDate(today);
+
+    // Hitung tanggal kemarin dan 2 hari lalu untuk referensi AI
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    const twoDaysAgo = new Date(today); twoDaysAgo.setDate(today.getDate() - 2);
+    // ------------------------------------------------------
     
     const prompt = `
-      Kamu adalah asisten keuangan presisi. Analisis data input ini (bisa berupa gambar struk, transkrip suara/audio, atau teks chat langsung).
-      PENTING: Sistem keuangan ini adalah milik "ORYZA" (Oryza Ilyas Aryaduta).
+      Analisis input berikut. Jika ada lebih dari satu transaksi, pecah menjadi beberapa objek dalam array.
+      REFERENSI WAKTU: Hari ini adalah ${todayString}.
       
-      REFERENSI WAKTU SAAT INI: ${todayString}
-      Jika teks mengandung kata "hari ini", "barusan", "tadi", "sekarang", atau tidak menyebutkan tanggal spesifik, WAJIB gunakan tanggal ${todayString}.
-
-      ATURAN PENENTUAN "tipe" ARUS KAS:
-      1. Jika input adalah bukti transfer masuk (penerima adalah ORYZA), slip gaji, atau teks yang menyatakan mendapat/menerima uang, maka tipe wajib "pemasukan".
-      2. Jika input adalah bukti transfer keluar, struk belanja, nota, atau teks yang menyatakan membeli/membayar sesuatu, maka tipe wajib "pengeluaran".
-
-      Kembalikan HANYA JSON murni tanpa markdown:
-      {
-        "tanggal": "YYYY-MM-DD",
-        "deskripsi": "Nama merchant atau rincian transaksi",
-        "nominal": angka_murni_tanpa_simbol,
-        "kategori": "Makanan / Transportasi / Gaji / Belanja / Transfer / Lainnya",
-        "metode_pembayaran": "Cash / Transfer Bank / E-Wallet / Qris",
-        "tipe": "pemasukan atau pengeluaran"
-      }
+      PENTING: Kembalikan dalam format ARRAY JSON (bungkus dengan []), jangan ada teks lain!
+      Contoh format:
+      [
+        {
+          "tanggal": "2026-05-24",
+          "deskripsi": "Transfer ke mamah",
+          "nominal": 500000,
+          "kategori": "Transfer",
+          "metode_pembayaran": "Transfer Bank",
+          "tipe": "pengeluaran"
+        },
+        {
+          "tanggal": "2026-05-23",
+          "deskripsi": "Beli bensin",
+          "nominal": 100000,
+          "kategori": "Transportasi",
+          "metode_pembayaran": "Cash",
+          "tipe": "pengeluaran"
+        }
+      ]
     `;
+
+    const result = await model.generateContent([prompt, ...aiInput]);
+    const cleanJsonString = result.response.text().replace(/```json/g, "").replace(/```/g, "").trim();
+    const transactionsArray = JSON.parse(cleanJsonString); // Sekarang hasilnya pasti Array
+
+    // Menyimpan banyak data sekaligus ke Supabase
+    const { error } = await supabase.from("transactions").insert(transactionsArray);
+    if (error) throw error;
+
+    // Report balasan untuk banyak data
+    const listReport = transactionsArray.map(t => `- ${t.deskripsi}: Rp ${t.nominal.toLocaleString('id-ID')}`).join('\n');
+    await sendMessage(chatId, `✅ Berhasil mencatat ${transactionsArray.length} transaksi:\n\n${listReport}`);
 
     const result = await model.generateContent([prompt, ...aiInput]);
     const cleanJsonString = result.response.text().replace(/```json/g, "").replace(/```/g, "").trim();
