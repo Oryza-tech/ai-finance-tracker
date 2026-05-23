@@ -52,18 +52,22 @@ export async function POST(req) {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const prompt = `
-      Analisis gambar struk, nota, slip gaji, atau bukti transfer ini.
+      Analisis gambar struk, nota, slip gaji, mutasi, atau bukti transfer ini.
+      PENTING: Sistem keuangan ini adalah milik "ORYZA" (Oryza Ilyas Aryaduta).
+
+      ATURAN PENENTUAN "tipe" ARUS KAS:
+      1. Jika dokumen adalah bukti transfer masuk (penerima/tujuan transfer adalah ORYZA), atau slip gaji, maka tipe wajib diisi "pemasukan".
+      2. Jika dokumen adalah bukti transfer keluar (pengirimnya adalah ORYZA), struk belanja, atau nota makan, maka tipe wajib diisi "pengeluaran".
+
       Kembalikan HANYA JSON murni tanpa markdown:
       {
         "tanggal": "YYYY-MM-DD",
-        "deskripsi": "Nama merchant atau rincian",
+        "deskripsi": "Nama merchant atau rincian pengirim/penerima",
         "nominal": angka_murni_tanpa_simbol,
         "kategori": "Makanan / Transportasi / Gaji / Belanja / Transfer / Lainnya",
-        "metode_pembayaran": "Cash / Transfer / E-Wallet",
+        "metode_pembayaran": "Cash / Transfer Bank / E-Wallet",
         "tipe": "pemasukan atau pengeluaran"
       }
-      - Jika slip gaji/uang masuk = "pemasukan"
-      - Jika struk belanja/uang keluar = "pengeluaran"
     `;
 
     const imageParts = [{ inlineData: { data: base64Image, mimeType: "image/jpeg" } }];
