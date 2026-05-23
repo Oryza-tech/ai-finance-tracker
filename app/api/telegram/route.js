@@ -1,12 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
-import { supabase } from "../../supabase"; // Sesuaikan path ini dengan letak file supabase.js milikmu
+import { supabase } from "../../supabase";
 
-// Konfigurasi Token
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
-// Fungsi internal untuk bot membalas chat
 async function sendMessage(chatId, text) {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
@@ -15,75 +13,95 @@ async function sendMessage(chatId, text) {
   });
 }
 
+// Fungsi internal untuk mengunduh file dari server Telegram (Foto / Audio)
+async function getFileBase64(fileId) {
+  const fileRes = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
+  const fileData = await fileRes.json();
+  const filePath = fileData.result.file_path;
+
+  const dlRes = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`);
+  const arrayBuffer = await dlRes.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  return buffer.toString("base64");
+}
+
 export async function POST(req) {
   try {
     const body = await req.json();
-    
-    // Validasi: Pastikan ada pesan masuk
     if (!body.message) return NextResponse.json({ status: "ok" });
     
     const chatId = body.message.chat.id;
+    const msg = body.message;
 
-    // Jika user cuma mengirim teks biasa (bukan gambar)
-    if (!body.message.photo) {
-      await sendMessage(chatId, "Kirimkan foto struk atau bukti transfer untuk dicatat ke sistem, Bro!");
+    // Abaikan command /start
+    if (msg.text === "/start") {
+      await sendMessage(chatId, "Halo Bro! Sistem siap. Kirimkan teks laporan, foto struk, atau voice note untuk mencatat keuanganmu.");
       return NextResponse.json({ status: "ok" });
     }
 
-    await sendMessage(chatId, "⏳ Mesin AI sedang membaca strukmu...");
+    let aiInput = [];
+    
+    // 1. SENSOR DETEKSI: FOTO
+    if (msg.photo) {
+      await sendMessage(chatId, "📸 Memproses gambar struk...");
+      const fileId = msg.photo[msg.photo.length - 1].file_id;
+      const base64Image = await getFileBase64(fileId);
+      aiInput.push({ inlineData: { data: base64Image, mimeType: "image/jpeg" } });
+    } 
+    // 2. SENSOR DETEKSI: VOICE NOTE
+    else if (msg.voice) {
+      await sendMessage(chatId, "🎙️ Mendengarkan voice note...");
+      const fileId = msg.voice.file_id;
+      const base64Audio = await getFileBase64(fileId);
+      // Telegram voice note menggunakan format audio/ogg
+      aiInput.push({ inlineData: { data: base64Audio, mimeType: "audio/ogg" } });
+    } 
+    // 3. SENSOR DETEKSI: TEKS
+    else if (msg.text) {
+      await sendMessage(chatId, "💬 Menganalisis teks...");
+      aiInput.push(msg.text);
+    } 
+    // JIKA FORMAT TIDAK DIKENAL
+    else {
+      await sendMessage(chatId, "Kirimkan foto, teks, atau rekaman suara ya, Bro!");
+      return NextResponse.json({ status: "ok" });
+    }
 
-    // Mengambil resolusi gambar paling besar dari server Telegram
-    const photoArray = body.message.photo;
-    const fileId = photoArray[photoArray.length - 1].file_id;
-
-    // Menarik file path dari server Telegram
-    const fileRes = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
-    const fileData = await fileRes.json();
-    const filePath = fileData.result.file_path;
-
-    // Mengunduh gambar dan mengubahnya jadi Base64 untuk Gemini
-    const imageRes = await fetch(`https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`);
-    const arrayBuffer = await imageRes.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64Image = buffer.toString("base64");
-
-    // Menghidupkan Gemini AI
+    // MENGHIDUPKAN MESIN AI
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const prompt = `
-      Analisis gambar struk, nota, slip gaji, mutasi, atau bukti transfer ini.
+      Kamu adalah asisten keuangan presisi. Analisis data input ini (bisa berupa gambar struk, transkrip suara/audio, atau teks chat langsung).
       PENTING: Sistem keuangan ini adalah milik "ORYZA" (Oryza Ilyas Aryaduta).
 
       ATURAN PENENTUAN "tipe" ARUS KAS:
-      1. Jika dokumen adalah bukti transfer masuk (penerima/tujuan transfer adalah ORYZA), atau slip gaji, maka tipe wajib diisi "pemasukan".
-      2. Jika dokumen adalah bukti transfer keluar (pengirimnya adalah ORYZA), struk belanja, atau nota makan, maka tipe wajib diisi "pengeluaran".
+      1. Jika input adalah bukti transfer masuk (penerima adalah ORYZA), slip gaji, atau teks yang menyatakan mendapat/menerima uang, maka tipe wajib "pemasukan".
+      2. Jika input adalah bukti transfer keluar, struk belanja, nota, atau teks yang menyatakan membeli/membayar sesuatu, maka tipe wajib "pengeluaran".
 
       Kembalikan HANYA JSON murni tanpa markdown:
       {
         "tanggal": "YYYY-MM-DD",
-        "deskripsi": "Nama merchant atau rincian pengirim/penerima",
+        "deskripsi": "Nama merchant atau rincian transaksi",
         "nominal": angka_murni_tanpa_simbol,
         "kategori": "Makanan / Transportasi / Gaji / Belanja / Transfer / Lainnya",
-        "metode_pembayaran": "Cash / Transfer Bank / E-Wallet",
+        "metode_pembayaran": "Cash / Transfer Bank / E-Wallet / Qris",
         "tipe": "pemasukan atau pengeluaran"
       }
     `;
 
-    const imageParts = [{ inlineData: { data: base64Image, mimeType: "image/jpeg" } }];
-    const result = await model.generateContent([prompt, ...imageParts]);
+    const result = await model.generateContent([prompt, ...aiInput]);
     const cleanJsonString = result.response.text().replace(/```json/g, "").replace(/```/g, "").trim();
     const extractedData = JSON.parse(cleanJsonString);
 
-    // Menyimpan hasil ekstrak langsung ke Supabase
+    // MENYIMPAN KE DATABASE
     const { error } = await supabase.from("transactions").insert([extractedData]);
-    
     if (error) throw error;
 
-    // Memberikan report ke Telegram
-    const pesanSukses = `✅ *Data Berhasil Disimpan!*\n\n` +
+    // REPORT BALASAN
+    const pesanSukses = `✅ *Terekam!*\n\n` +
                         `Tipe: ${extractedData.tipe.toUpperCase()}\n` +
-                        `Deskripsi: ${extractedData.deskripsi}\n` +
+                        `Detail: ${extractedData.deskripsi}\n` +
                         `Nominal: Rp ${extractedData.nominal.toLocaleString('id-ID')}\n` +
                         `Kategori: ${extractedData.kategori}`;
                         
