@@ -70,10 +70,21 @@ export async function POST(req) {
     // MENGHIDUPKAN MESIN AI
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    // --- MODUL RTC (REAL TIME CLOCK) ZONA WIB ---
+    // Vercel menggunakan waktu UTC, jadi kita kalibrasi ke WIB (UTC+7)
+    const now = new Date();
+    const wibOffset = 7 * 60 * 60 * 1000; 
+    const wibDate = new Date(now.getTime() + wibOffset);
+    const todayString = wibDate.toISOString().split('T')[0]; // Hasil: YYYY-MM-DD
+    // --------------------------------------------
     
     const prompt = `
       Kamu adalah asisten keuangan presisi. Analisis data input ini (bisa berupa gambar struk, transkrip suara/audio, atau teks chat langsung).
       PENTING: Sistem keuangan ini adalah milik "ORYZA" (Oryza Ilyas Aryaduta).
+      
+      REFERENSI WAKTU SAAT INI: ${todayString}
+      Jika teks mengandung kata "hari ini", "barusan", "tadi", "sekarang", atau tidak menyebutkan tanggal spesifik, WAJIB gunakan tanggal ${todayString}.
 
       ATURAN PENENTUAN "tipe" ARUS KAS:
       1. Jika input adalah bukti transfer masuk (penerima adalah ORYZA), slip gaji, atau teks yang menyatakan mendapat/menerima uang, maka tipe wajib "pemasukan".
