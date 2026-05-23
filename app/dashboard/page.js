@@ -29,30 +29,33 @@ export default function Dashboard() {
     }
   };
 
-  // Fungsi untuk menghapus baris data
   const handleDelete = async (id) => {
     const isConfirmed = window.confirm("Yakin mau hapus transaksi ini, Bro?");
     if (!isConfirmed) return;
 
     try {
-      const { error } = await supabase
-        .from("transactions")
-        .delete()
-        .eq("id", id);
-
+      const { error } = await supabase.from("transactions").delete().eq("id", id);
       if (error) throw error;
-      
-      // Update tampilan HMI dengan membuang data yang dihapus
       setTransactions(transactions.filter(trx => trx.id !== id));
     } catch (error) {
       alert("Gagal menghapus data: " + error.message);
     }
   };
 
-  const total = transactions.reduce((sum, item) => sum + Number(item.nominal), 0);
+  // LOGIKA MATEMATIKA ARUS KAS
+  const totalPemasukan = transactions
+    .filter(item => item.tipe?.toLowerCase() === "pemasukan")
+    .reduce((sum, item) => sum + Number(item.nominal), 0);
 
-  // Logika memproses data mentah menjadi format yang dibaca oleh Pie Chart
-  const categoryData = transactions.reduce((acc, current) => {
+  const totalPengeluaran = transactions
+    .filter(item => item.tipe?.toLowerCase() === "pengeluaran")
+    .reduce((sum, item) => sum + Number(item.nominal), 0);
+
+  const sisaSaldo = totalPemasukan - totalPengeluaran;
+
+  // Memfilter grafik HANYA untuk melihat distribusi pengeluaran
+  const expenseTransactions = transactions.filter(item => item.tipe?.toLowerCase() === "pengeluaran");
+  const categoryData = expenseTransactions.reduce((acc, current) => {
     const kategori = current.kategori || "Lainnya";
     const existing = acc.find(item => item.name === kategori);
     if (existing) {
@@ -63,7 +66,6 @@ export default function Dashboard() {
     return acc;
   }, []);
 
-  // Palet warna untuk grafik
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#e84118'];
 
   return (
@@ -77,65 +79,64 @@ export default function Dashboard() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Panel Indikator Total */}
-          <div className="bg-white p-6 rounded-xl shadow-md border-l-4 border-blue-500 md:col-span-1 flex flex-col justify-center">
-            <h2 className="text-gray-500 font-semibold mb-2">Total Pengeluaran</h2>
-            <p className="text-4xl font-bold text-gray-800 break-words">
-              Rp {total.toLocaleString('id-ID')}
-            </p>
+        {/* 3 PANEL INDIKATOR UTAMA (ARUS KAS) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-white p-5 rounded-xl shadow-md border-l-4 border-green-500">
+            <h2 className="text-gray-400 text-sm font-semibold">Total Pemasukan</h2>
+            <p className="text-2xl font-bold text-green-600 mt-1">Rp {totalPemasukan.toLocaleString('id-ID')}</p>
           </div>
-
-          {/* Panel Visualisasi Grafik */}
-          <div className="bg-white p-4 rounded-xl shadow-md md:col-span-2 h-64">
-            <h2 className="text-gray-500 font-semibold mb-2 text-center">Distribusi Pengeluaran</h2>
-            {transactions.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={categoryData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => `Rp ${value.toLocaleString('id-ID')}`} />
-                  <Legend verticalAlign="bottom" height={36}/>
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-gray-400 text-sm">Belum ada data untuk grafik</div>
-            )}
+          <div className="bg-white p-5 rounded-xl shadow-md border-l-4 border-red-500">
+            <h2 className="text-gray-400 text-sm font-semibold">Total Pengeluaran</h2>
+            <p className="text-2xl font-bold text-red-600 mt-1">Rp {totalPengeluaran.toLocaleString('id-ID')}</p>
+          </div>
+          <div className="bg-white p-5 rounded-xl shadow-md border-l-4 border-blue-500">
+            <h2 className="text-gray-400 text-sm font-semibold">Sisa Saldo (Efisiensi)</h2>
+            <p className={`text-2xl font-bold mt-1 ${sisaSaldo >= 0 ? "text-blue-600" : "text-amber-600"}`}>
+              Rp {sisaSaldo.toLocaleString('id-ID')}
+            </p>
           </div>
         </div>
 
+        {/* PANEL GRAFIK */}
+        <div className="bg-white p-6 rounded-xl shadow-md mb-8 h-80">
+          <h2 className="text-gray-500 font-semibold mb-2 text-center">Persentase Alokasi Pengeluaran</h2>
+          {expenseTransactions.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={categoryData} cx="50%" cy="45%" innerRadius={65} outerRadius={85} paddingAngle={4} dataKey="value">
+                  {categoryData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => `Rp ${value.toLocaleString('id-ID')}`} />
+                <Legend verticalAlign="bottom" height={40}/>
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-400 text-sm">Belum ada data pengeluaran</div>
+          )}
+        </div>
+
+        {/* LOG DATA LOGGER TABLE */}
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
           <div className="p-4 bg-gray-800 text-white font-bold flex justify-between items-center">
-            <span>Riwayat Transaksi</span>
-            <span className="font-normal text-sm bg-gray-700 px-2 py-1 rounded">
-              Total Data: {transactions.length}
-            </span>
+            <span>Riwayat Transaksi Campuran</span>
+            <span className="font-normal text-sm bg-gray-700 px-2 py-1 rounded">Log: {transactions.length}</span>
           </div>
           
           {loading ? (
-            <div className="p-8 text-center text-gray-500 font-semibold animate-pulse">Menyinkronkan data...</div>
+            <div className="p-8 text-center text-gray-500 font-semibold animate-pulse">Menyinkronkan...</div>
           ) : transactions.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">Sistem belum merekam data transaksi apapun.</div>
+            <div className="p-8 text-center text-gray-500">Belum ada records log data.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-100 border-b">
                     <th className="p-4 font-semibold text-gray-600">Tanggal</th>
+                    <th className="p-4 font-semibold text-gray-600">Jenis</th>
                     <th className="p-4 font-semibold text-gray-600">Deskripsi</th>
                     <th className="p-4 font-semibold text-gray-600">Kategori</th>
-                    <th className="p-4 font-semibold text-gray-600">Metode</th>
                     <th className="p-4 font-semibold text-gray-600 text-right">Nominal</th>
                     <th className="p-4 font-semibold text-gray-600 text-center">Aksi</th>
                   </tr>
@@ -143,25 +144,25 @@ export default function Dashboard() {
                 <tbody>
                   {transactions.map((trx) => (
                     <tr key={trx.id} className="border-b hover:bg-blue-50 transition-colors">
-                      <td className="p-4 font-medium text-gray-700">{trx.tanggal}</td>
-                      <td className="p-4 text-gray-600">{trx.deskripsi}</td>
+                      <td className="p-4 text-gray-700">{trx.tanggal}</td>
                       <td className="p-4">
-                        <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded border border-blue-200">
-                          {trx.kategori}
+                        <span className={`text-xs font-bold uppercase px-2 py-1 rounded ${
+                          trx.tipe?.toLowerCase() === 'pemasukan' 
+                            ? 'bg-green-100 text-green-800 border border-green-200' 
+                            : 'bg-amber-100 text-amber-800 border border-amber-200'
+                        }`}>
+                          {trx.tipe || 'pengeluaran'}
                         </span>
                       </td>
-                      <td className="p-4 text-gray-600 text-sm">{trx.metode_pembayaran}</td>
-                      <td className="p-4 text-right font-bold text-red-600">
-                        Rp {Number(trx.nominal).toLocaleString('id-ID')}
+                      <td className="p-4 text-gray-600">{trx.deskripsi}</td>
+                      <td className="p-4 text-sm text-gray-600">{trx.kategori}</td>
+                      <td className={`p-4 text-right font-bold ${
+                        trx.tipe?.toLowerCase() === 'pemasukan' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {trx.tipe?.toLowerCase() === 'pemasukan' ? '+' : '-'} Rp {Number(trx.nominal).toLocaleString('id-ID')}
                       </td>
                       <td className="p-4 text-center">
-                        <button 
-                          onClick={() => handleDelete(trx.id)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-md transition-colors"
-                          title="Hapus Transaksi"
-                        >
-                          🗑️
-                        </button>
+                        <button onClick={() => handleDelete(trx.id)} className="text-red-500 hover:text-red-700 p-2">🗑️</button>
                       </td>
                     </tr>
                   ))}
