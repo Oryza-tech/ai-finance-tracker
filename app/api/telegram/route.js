@@ -1,18 +1,24 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
-import { supabase } from "../../../supabase"; // Pastikan path ini benar sesuai struktur foldermu
+// PERBAIKAN JALUR SUPABASE (Sesuai dengan screenshot struktur folder kamu)
+import { supabase } from "../../supabase"; 
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
 async function sendMessage(chatId, text) {
-  await fetch(`${TELEGRAM_API}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: text }),
-  });
+  try {
+    await fetch(`${TELEGRAM_API}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: text }),
+    });
+  } catch (err) {
+    console.error("Gagal mengirim pesan Telegram", err);
+  }
 }
 
+// Fungsi internal untuk mengunduh file
 async function getFileBase64(fileId) {
   const fileRes = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
   const fileData = await fileRes.json();
@@ -23,11 +29,13 @@ async function getFileBase64(fileId) {
 }
 
 export async function POST(req) {
+  let chatId = null; // Deklarasi di luar try agar bisa diakses oleh catch block
+  
   try {
     const body = await req.json();
     if (!body.message) return NextResponse.json({ status: "ok" });
     
-    const chatId = body.message.chat.id;
+    chatId = body.message.chat.id;
     const msg = body.message;
 
     // --- MODUL RTC WIB ---
@@ -48,10 +56,14 @@ export async function POST(req) {
       aiInput.push({ inlineData: { data: await getFileBase64(msg.voice.file_id), mimeType: "audio/ogg" } });
     } else if (msg.text) {
       if (msg.text === "/start") {
-        await sendMessage(chatId, "Halo Bro Oryza! Kirimkan struk atau laporan keuanganmu.");
+        await sendMessage(chatId, "Halo Bro Oryza! Kirimkan struk, voice note, atau laporan keuanganmu.");
         return NextResponse.json({ status: "ok" });
       }
+      // Membalas dulu agar bot tidak terasa mati
+      await sendMessage(chatId, "💬 Menganalisis teks...");
       aiInput.push(msg.text);
+    } else {
+      return NextResponse.json({ status: "ok" });
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -64,10 +76,10 @@ export async function POST(req) {
       Jika ada beberapa transaksi, pecah menjadi beberapa objek.
       
       FORMAT WAJIB:
-      [{"tanggal": "YYYY-MM-DD", "deskripsi": "...", "nominal": 0, "kategori": "...", "metode_pembayaran": "...", "tipe": "pemasukan/pengeluaran"}]
+      [{"tanggal": "YYYY-MM-DD", "deskripsi": "...", "nominal": 0, "kategori": "...", "metode_pembayaran": "...", "tipe": "pemasukan"}]
       
-      Aturan Tipe: Transfer ke Oryza = pemasukan, Oryza bayar/transfer keluar = pengeluaran.
-      Kembalikan HANYA JSON murni!
+      Aturan Tipe: Transfer MASUK ke Oryza / Gaji = "pemasukan". Oryza bayar/transfer KELUAR = "pengeluaran".
+      Kembalikan HANYA JSON murni (array), tanpa markdown!
     `;
 
     const result = await model.generateContent([prompt, ...aiInput]);
@@ -76,14 +88,23 @@ export async function POST(req) {
 
     if (Array.isArray(data)) {
       const { error } = await supabase.from("transactions").insert(data);
-      if (error) throw error;
+      if (error) {
+        await sendMessage(chatId, `❌ Gagal menyimpan ke database: ${error.message}`);
+        throw error;
+      }
       const list = data.map(t => `- ${t.deskripsi}: Rp ${t.nominal.toLocaleString('id-ID')}`).join('\n');
       await sendMessage(chatId, `✅ Berhasil disimpan:\n${list}`);
+    } else {
+       await sendMessage(chatId, `❌ AI memberikan format salah. Coba kalimat lain, Bro!`);
     }
 
     return NextResponse.json({ status: "ok" });
   } catch (error) {
     console.error("Webhook Error:", error);
-    return NextResponse.json({ status: "error" });
+    // Sekarang kalau error, bot akan chat kamu!
+    if (chatId) {
+       await sendMessage(chatId, `🔧 Sirkuit error Bro: ${error.message || "Timeout/Gagal parsing"}`);
+    }
+    return NextResponse.json({ status: "error" }, { status: 500 });
   }
 }
