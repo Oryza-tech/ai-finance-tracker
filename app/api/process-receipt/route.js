@@ -5,7 +5,7 @@ export async function POST(req) {
   try {
     // KABEL DAYA dipasang di DALAM fungsi agar selalu terbaca saat ada request masuk
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
 
     const formData = await req.formData();
     const file = formData.get("file");

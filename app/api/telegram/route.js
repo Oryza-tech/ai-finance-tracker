@@ -107,4 +107,5 @@ export async function POST(req) {
     }
     // PENTING: Kita WAJIB membalas dengan status 200 (ok) agar Telegram berhenti mengirim ulang (stop looping!)
     return NextResponse.json({ status: "ok" }); 
-  }
+    }
+}
