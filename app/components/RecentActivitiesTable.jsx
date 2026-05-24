@@ -1,6 +1,6 @@
-import { Calendar, Tag, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { Calendar, Tag, ArrowUpCircle, Pencil, Trash2 } from "lucide-react";
 
-export default function RecentActivitiesTable({ transactions, formatRupiah }) {
+export default function RecentActivitiesTable({ transactions, formatRupiah, onEdit, onDelete }) {
   return (
     <div className="bg-[#0f172a] rounded-2xl border border-slate-800 shadow-lg p-6">
       <div className="flex justify-between items-center mb-6">
@@ -19,31 +19,44 @@ export default function RecentActivitiesTable({ transactions, formatRupiah }) {
               <th className="pb-4 font-semibold uppercase text-xs tracking-wider">Description</th>
               <th className="pb-4 font-semibold uppercase text-xs tracking-wider">Category</th>
               <th className="pb-4 font-semibold uppercase text-xs tracking-wider text-right">Amount</th>
+              <th className="pb-4 font-semibold uppercase text-xs tracking-wider text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/40">
             {transactions.length > 0 ? (
-              transactions.slice(0, 5).map((t, index) => (
-                <tr key={index} className="hover:bg-slate-800/10 transition-colors group">
-                  <td className="py-5 text-xs text-slate-400">{t.tanggal}</td>
-                  <td className="py-5">
+              transactions.slice(0, 5).map((t) => (
+                <tr key={t.id} className="hover:bg-slate-800/10 transition-colors group">
+                  <td className="py-4 text-xs text-slate-400 whitespace-nowrap">
+                    <span className="flex items-center gap-1"><Calendar size={12} /> {t.tanggal}</span>
+                  </td>
+                  <td className="py-4">
                     <span className="font-semibold text-white group-hover:text-blue-400 transition-colors text-sm">{t.deskripsi}</span>
                   </td>
-                  <td className="py-5">
+                  <td className="py-4">
                     <span className="bg-slate-800/80 text-slate-300 px-3 py-1.5 rounded-xl text-xs font-medium border border-slate-700/60 inline-flex items-center gap-1 capitalize">
                       <Tag size={12} className="text-slate-500" /> {t.kategori || "Umum"}
                     </span>
                   </td>
-                  <td className="py-5 text-right">
+                  <td className="py-4 text-right">
                     <span className={`font-bold text-base ${t.tipe === 'pemasukan' ? 'text-emerald-500' : 'text-rose-500'}`}>
                       {t.tipe === 'pemasukan' ? '+' : '-'}{formatRupiah(t.nominal)}
                     </span>
+                  </td>
+                  <td className="py-4 text-right">
+                    <div className="flex items-center justify-end gap-2 ">
+                      <button onClick={() => onEdit(t)} className="p-1.5 rounded-lg hover:bg-yellow-500/10 text-slate-500 hover:text-yellow-400 transition-colors">
+                        <Pencil size={14} />
+                      </button>
+                      <button onClick={() => onDelete(t.id)} className="p-1.5 rounded-lg hover:bg-rose-500/10 text-slate-500 hover:text-rose-400 transition-colors">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="4" className="py-12 text-center text-slate-500 font-medium">
+                <td colSpan="5" className="py-12 text-center text-slate-500 font-medium">
                   No transactions yet.
                 </td>
               </tr>
