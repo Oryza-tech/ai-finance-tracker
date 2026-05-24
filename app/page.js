@@ -9,14 +9,19 @@ import CashFlowChart from "./components/CashFlowChart";
 import ExpenseCategories from "./components/ExpenseCategories";
 import RecentActivitiesTable from "./components/RecentActivitiesTable";
 import TransactionModal from "./components/TransactionModal";
+import { KpiSkeleton, TableSkeleton } from "./components/Skeleton";
+import { useToast } from "./components/Toast";
 import { APP_CONFIG, formatRupiah, calculateMoM } from "../lib/config";
-import { validateTransaction, sanitizeInput, safeParseJSON } from "../lib/validation";
+import { validateTransaction, sanitizeInput } from "../lib/validation";
 import { logError, createLogger } from "../lib/logger";
 
 export default function Dashboard() {
   const logger = createLogger("DashboardPage");
+  const { toast } = useToast();
   const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ deskripsi: '', nominal: '', tanggal: '', tipe: 'pengeluaran', kategori: '' });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -24,7 +29,19 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
 
-  // --- 1. TARIK DATA DARI SUPABASE ---
+  // Keyboard shortcut: N → open new transaction modal
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'n' || e.key === 'N') {
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+        openNewModal();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // --- 1. FETCH DATA ---
   const fetchTransactions = async () => {
     const { data, error } = await supabase
       .from("transactions")
@@ -32,13 +49,12 @@ export default function Dashboard() {
       .order('tanggal', { ascending: false });
 
     if (!error && data) setTransactions(data);
+    setLoading(false);
   };
 
-  useEffect(() => {
-    fetchTransactions();
-  }, []);
+  useEffect(() => { fetchTransactions(); }, []);
 
-  // --- 2. LOGIKA KEUANGAN & KOMPUTASI ---
+  // --- 2. FINANCIAL COMPUTATIONS ---
   const {
     totalIncome, totalExpense, currentBalance,
     balanceThisMonth, balanceLastMonth,
@@ -90,7 +106,7 @@ export default function Dashboard() {
   const incomeChange = calculateMoM(incomeThisMonth, incomeLastMonth);
   const expenseChange = calculateMoM(expenseThisMonth, expenseLastMonth);
 
-  // --- 2B. DATA CHART & FILTER ---
+  // --- 2B. CHART DATA ---
   const chartData = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -98,9 +114,9 @@ export default function Dashboard() {
     const buckets = {};
 
     const getKey = (t) => {
-      if (selectedRange === 'weekly') return t.tanggal.slice(5); // MM-DD
-      if (selectedRange === 'monthly') return t.tanggal.slice(8, 10); // DD
-      return ("0" + (new Date(t.tanggal).getMonth() + 1)).slice(-2); // MM
+      if (selectedRange === 'weekly') return t.tanggal.slice(5);
+      if (selectedRange === 'monthly') return t.tanggal.slice(8, 10);
+      return ("0" + (new Date(t.tanggal).getMonth() + 1)).slice(-2);
     };
 
     const inRange = (t) => {
@@ -129,7 +145,6 @@ export default function Dashboard() {
       });
   }, [transactions, selectedRange]);
 
-  // Custom Tooltip for Chart
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -146,31 +161,45 @@ export default function Dashboard() {
     return null;
   };
 
-  // --- 3. FUNGSI HANDLE MODAL & DATA ---
+  // --- 3. HANDLERS ---
   const handleRangeChange = (range) => setSelectedRange(range);
   const handleInputChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
   const triggerFileInput = (ref) => ref.current && ref.current.click();
 
+  const openNewModal = () => {
+    setEditingId(null);
+    setFormData({ deskripsi: '', nominal: '', tanggal: '', tipe: 'pengeluaran', kategori: '' });
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (t) => {
+    setEditingId(t.id);
+    setFormData({ deskripsi: t.deskripsi, nominal: t.nominal, tanggal: t.tanggal, tipe: t.tipe, kategori: t.kategori || '' });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Delete this transaction?")) return;
+    const { error } = await supabase.from("transactions").delete().eq("id", id);
+    if (error) {
+      toast("Failed to delete transaction", "error");
+    } else {
+      toast("Transaction deleted");
+      fetchTransactions();
+    }
+  };
+
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     setIsAnalyzing(true);
     setError(null);
     const body = new FormData();
     body.append("file", file);
-
     try {
-      const res = await fetch("/api/process-receipt", {
-        method: "POST",
-        body: body,
-      });
+      const res = await fetch("/api/process-receipt", { method: "POST", body });
       const result = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(result.error || "Failed to process receipt");
-      }
-
+      if (!res.ok) throw new Error(result.error || "Failed to process receipt");
       if (result.data) {
         setFormData({
           deskripsi: sanitizeInput(result.data.deskripsi || ''),
@@ -179,7 +208,7 @@ export default function Dashboard() {
           tipe: result.data.tipe || 'pengeluaran',
           kategori: result.data.kategori || APP_CONFIG.defaultCategory
         });
-        logger.info("Receipt processed successfully");
+        toast("Receipt scanned successfully");
       } else {
         throw new Error("Invalid response format from AI");
       }
@@ -187,6 +216,7 @@ export default function Dashboard() {
       const errorMsg = err instanceof Error ? err.message : "Unknown error occurred";
       logger.error(err, { file: file.name });
       setError(errorMsg);
+      toast(errorMsg, "error");
     } finally {
       setIsAnalyzing(false);
     }
@@ -194,40 +224,43 @@ export default function Dashboard() {
 
   const handleSaveToDatabase = async () => {
     setError(null);
-    
     if (!formData.deskripsi || !formData.nominal || !formData.tanggal) {
-      setError("Please fill in all required fields: description, amount, and date");
+      const msg = "Please fill in all required fields: description, amount, and date";
+      setError(msg);
+      toast(msg, "error");
       return;
     }
-
     setIsSaving(true);
     try {
       const payload = {
         tanggal: formData.tanggal,
         deskripsi: sanitizeInput(formData.deskripsi),
-        nominal: Math.abs(Number(formData.nominal)), // Ensure positive
+        nominal: Math.abs(Number(formData.nominal)),
         kategori: formData.kategori || APP_CONFIG.defaultCategory,
         tipe: formData.tipe,
         metode_pembayaran: APP_CONFIG.defaultPaymentMethod
       };
-
-      // Validate payload before sending
       const validatedPayload = validateTransaction(payload);
 
-      const { error: dbError } = await supabase.from("transactions").insert([validatedPayload]);
-
-      if (dbError) {
-        throw new Error(dbError.message || "Failed to save to database");
+      let dbError;
+      if (editingId) {
+        ({ error: dbError } = await supabase.from("transactions").update(validatedPayload).eq("id", editingId));
+      } else {
+        ({ error: dbError } = await supabase.from("transactions").insert([validatedPayload]));
       }
 
-      logger.info("Transaction saved successfully", { amount: payload.nominal });
+      if (dbError) throw new Error(dbError.message || "Failed to save to database");
+
+      toast(editingId ? "Transaction updated" : "Transaction saved");
       setIsModalOpen(false);
+      setEditingId(null);
       setFormData({ deskripsi: '', nominal: '', tanggal: '', tipe: 'pengeluaran', kategori: '' });
       fetchTransactions();
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Unknown error occurred";
+      const msg = err instanceof Error ? err.message : "Unknown error occurred";
+      setError(msg);
+      toast(msg, "error");
       logger.error(err);
-      setError(errorMsg);
     } finally {
       setIsSaving(false);
     }
@@ -236,54 +269,63 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-[#020617] text-slate-200 font-sans relative overflow-hidden">
       <Sidebar userName={APP_CONFIG.userName} currentPage="dashboard" />
-      {/* KONTEN UTAMA */}
-      <main className="flex-1 p-10 overflow-y-auto relative z-10">
-        <header className="flex justify-between items-center mb-10">
+      <main className="flex-1 p-6 md:p-10 overflow-y-auto relative z-10">
+        <header className="flex justify-between items-center mb-10 pt-10 md:pt-0">
           <div>
             <h2 className="text-3xl font-bold text-white mb-1">Financial Overview</h2>
             <p className="text-slate-400 text-sm">Welcome back, {APP_CONFIG.userName}! Here's your financial summary.</p>
           </div>
-          <button 
-            onClick={() => setIsModalOpen(true)}
+          <button
+            onClick={openNewModal}
+            title="New Transaction (N)"
             className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
           >
-            <Plus size={20} /> New Transaction
+            <Plus size={20} /> <span className="hidden sm:inline">New Transaction</span>
           </button>
         </header>
-        {/* KPI Section */}
-        <KpiSection
-          currentBalance={currentBalance}
-          balanceChange={balanceChange}
-          totalIncome={totalIncome}
-          incomeChange={incomeChange}
-          totalExpense={totalExpense}
-          expenseChange={expenseChange}
-          formatRupiah={formatRupiah}
-        />
-        {/* Charts Panel */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <CashFlowChart
-            chartData={chartData}
-            CustomTooltip={CustomTooltip}
-            onRangeChange={handleRangeChange}
-            selectedRange={selectedRange}
-          />
-          <ExpenseCategories
-            sortedCategories={sortedCategories}
-            totalExpense={totalExpense}
-            formatRupiah={formatRupiah}
-          />
-        </div>
-        {/* Recent Activities Table */}
-        <RecentActivitiesTable
-          transactions={transactions}
-          formatRupiah={formatRupiah}
-        />
+
+        {loading ? (
+          <>
+            <KpiSkeleton />
+            <TableSkeleton />
+          </>
+        ) : (
+          <>
+            <KpiSection
+              currentBalance={currentBalance}
+              balanceChange={balanceChange}
+              totalIncome={totalIncome}
+              incomeChange={incomeChange}
+              totalExpense={totalExpense}
+              expenseChange={expenseChange}
+              formatRupiah={formatRupiah}
+            />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              <CashFlowChart
+                chartData={chartData}
+                CustomTooltip={CustomTooltip}
+                onRangeChange={handleRangeChange}
+                selectedRange={selectedRange}
+              />
+              <ExpenseCategories
+                sortedCategories={sortedCategories}
+                totalExpense={totalExpense}
+                formatRupiah={formatRupiah}
+              />
+            </div>
+            <RecentActivitiesTable
+              transactions={transactions}
+              formatRupiah={formatRupiah}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+          </>
+        )}
       </main>
-      {/* Modal Transaction */}
+
       <TransactionModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => { setIsModalOpen(false); setEditingId(null); }}
         isAnalyzing={isAnalyzing}
         isSaving={isSaving}
         formData={formData}
@@ -291,6 +333,7 @@ export default function Dashboard() {
         onImageUpload={handleImageUpload}
         onSave={handleSaveToDatabase}
         triggerFileInput={triggerFileInput}
+        editingId={editingId}
       />
     </div>
   );
