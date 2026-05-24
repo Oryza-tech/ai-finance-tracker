@@ -101,10 +101,10 @@ export async function POST(req) {
     return NextResponse.json({ status: "ok" });
   } catch (error) {
     console.error("Webhook Error:", error);
-    // Sekarang kalau error, bot akan chat kamu!
     if (chatId) {
-       await sendMessage(chatId, `🔧 Sirkuit error Bro: ${error.message || "Timeout/Gagal parsing"}`);
+       // Kirim notifikasi error tapi tetap santai
+       await sendMessage(chatId, `🔧 Sirkuit error Bro: ${error.message.substring(0, 50)}...`);
     }
-    return NextResponse.json({ status: "error" }, { status: 500 });
+    // PENTING: Kita WAJIB membalas dengan status 200 (ok) agar Telegram berhenti mengirim ulang (stop looping!)
+    return NextResponse.json({ status: "ok" }); 
   }
-}
