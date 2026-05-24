@@ -67,7 +67,8 @@ export async function POST(req) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    // ✅ MESIN SUDAH DIGANTI KE 3.1 FLASH LITE (Limit 500 Request)
+    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
     
     const prompt = `
       Kamu adalah asisten keuangan Oryza. Hari ini: ${todayString}.
@@ -95,17 +96,17 @@ export async function POST(req) {
       const list = data.map(t => `- ${t.deskripsi}: Rp ${t.nominal.toLocaleString('id-ID')}`).join('\n');
       await sendMessage(chatId, `✅ Berhasil disimpan:\n${list}`);
     } else {
-       await sendMessage(chatId, `❌ AI memberikan format salah. Coba kalimat lain, Bro!`);
+       await sendMessage(chatId, `❌ AI memberikan format salah. Coba kalimat lain!`);
     }
 
     return NextResponse.json({ status: "ok" });
   } catch (error) {
     console.error("Webhook Error:", error);
     if (chatId) {
-       // Kirim notifikasi error tapi tetap santai
-       await sendMessage(chatId, `🔧 Sirkuit error Bro: ${error.message.substring(0, 50)}...`);
+       // ✅ SUBSTRING DIHAPUS, biar pesan error tampil full kalau ada masalah
+       await sendMessage(chatId, `🔧 Sirkuit error Bro: ${error.message}`);
     }
     // PENTING: Kita WAJIB membalas dengan status 200 (ok) agar Telegram berhenti mengirim ulang (stop looping!)
     return NextResponse.json({ status: "ok" }); 
-    }
+  }
 }
