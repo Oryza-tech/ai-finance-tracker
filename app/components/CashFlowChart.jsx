@@ -34,18 +34,18 @@ export default function CashFlowChart({ chartData, CustomTooltip, onRangeChange,
   const hasData = chartData.length > 0;
 
   return (
-    <div className="col-span-2 bg-[#0f172a] p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col h-80">
-      <div className="mb-4 flex justify-between items-center">
+    <div className="col-span-1 lg:col-span-2 bg-[#0f172a] p-4 md:p-6 rounded-2xl border border-slate-800 shadow-lg flex flex-col h-80">
+      <div className="mb-4 flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div>
-          <h4 className="text-white font-bold text-lg">Cash Flow Analysis</h4>
+          <h4 className="text-white font-bold text-base md:text-lg">Cash Flow Analysis</h4>
           <p className="text-slate-400 text-xs mt-0.5">Income · Expense · Cumulative Net</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 sm:gap-2">
           {timeRanges.map(r => (
             <button
               key={r.value}
               onClick={() => onRangeChange(r.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              className={`px-2.5 md:px-3 py-1 md:py-1.5 rounded-lg text-xs font-semibold border transition-colors whitespace-nowrap ${
                 selectedRange === r.value
                   ? 'bg-blue-600 text-white border-blue-600'
                   : 'bg-[#1e293b] text-slate-400 border-slate-700 hover:bg-blue-500/20'
@@ -60,21 +60,25 @@ export default function CashFlowChart({ chartData, CustomTooltip, onRangeChange,
       <div className="flex-1 w-full">
         {hasData ? (
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }} barGap={2}>
+            <ComposedChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }} barGap={2}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
               <XAxis
                 dataKey="tanggal"
                 stroke="#475569"
-                fontSize={11}
+                fontSize={10}
                 tickLine={false}
                 axisLine={false}
+                angle={-45}
+                textAnchor="end"
+                height={60}
                 tickFormatter={(v) => formatXTick(v, selectedRange)}
               />
               <YAxis
                 stroke="#475569"
-                fontSize={11}
+                fontSize={10}
                 tickLine={false}
                 axisLine={false}
+                width={50}
                 tickFormatter={formatYTick}
               />
               <ReferenceLine y={0} stroke="#334155" strokeDasharray="4 2" />

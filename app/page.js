@@ -269,16 +269,16 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-[#020617] text-slate-200 font-sans relative overflow-hidden">
       <Sidebar userName={APP_CONFIG.userName} currentPage="dashboard" />
-      <main className="flex-1 p-6 md:p-10 overflow-y-auto relative z-10">
-        <header className="flex justify-between items-center mb-10 pt-10 md:pt-0">
-          <div>
-            <h2 className="text-3xl font-bold text-white mb-1">Financial Overview</h2>
-            <p className="text-slate-400 text-sm">Welcome back, {APP_CONFIG.userName}! Here's your financial summary.</p>
+      <main className="flex-1 px-3 py-4 sm:px-6 md:p-10 overflow-y-auto relative z-10">
+        <header className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8 md:mb-10 pt-12 md:pt-0">
+          <div className="flex-1">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-1">Financial Overview</h2>
+            <p className="text-slate-400 text-xs sm:text-sm">Welcome back, {APP_CONFIG.userName}! Here's your financial summary.</p>
           </div>
           <button
             onClick={openNewModal}
             title="New Transaction (N)"
-            className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
+            className="w-full md:w-auto bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-semibold flex items-center justify-center md:justify-start gap-2 transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40"
           >
             <Plus size={20} /> <span className="hidden sm:inline">New Transaction</span>
           </button>
@@ -300,7 +300,7 @@ export default function Dashboard() {
               expenseChange={expenseChange}
               formatRupiah={formatRupiah}
             />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mb-8">
               <CashFlowChart
                 chartData={chartData}
                 CustomTooltip={CustomTooltip}
