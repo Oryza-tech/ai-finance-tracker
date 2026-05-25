@@ -325,7 +325,7 @@ export default function Dashboard() {
 
       <TransactionModal
         isOpen={isModalOpen}
-        onClose={() => { setIsModalOpen(false); setEditingId(null); }}
+        onClose={() => { setIsModalOpen(false); setEditingId(null); setError(null); }}
         isAnalyzing={isAnalyzing}
         isSaving={isSaving}
         formData={formData}
@@ -334,6 +334,7 @@ export default function Dashboard() {
         onSave={handleSaveToDatabase}
         triggerFileInput={triggerFileInput}
         editingId={editingId}
+        error={error}
       />
     </div>
   );

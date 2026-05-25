@@ -1,10 +1,10 @@
-import { Plus, X, Loader2, UploadCloud, Pencil } from "lucide-react";
+import { Plus, X, Loader2, UploadCloud, Pencil, AlertCircle } from "lucide-react";
 import { useRef } from "react";
 
 export default function TransactionModal({
   isOpen, onClose, isAnalyzing, isSaving,
   formData, onInputChange, onImageUpload, onSave, triggerFileInput,
-  editingId = null,
+  editingId = null, error = null,
 }) {
   const fileInputRef = useRef(null);
   const isEditing = !!editingId;
@@ -22,6 +22,12 @@ export default function TransactionModal({
           </button>
         </div>
         <div className="p-6 flex flex-col gap-6">
+          {error && (
+            <div className="bg-rose-900/30 border border-rose-700 rounded-lg p-4 flex gap-3">
+              <AlertCircle size={20} className="text-rose-500 flex-shrink-0 mt-0.5" />
+              <p className="text-rose-200 text-sm">{error}</p>
+            </div>
+          )}
           {!isEditing && (
             <>
               <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={onImageUpload} />
@@ -59,11 +65,11 @@ export default function TransactionModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase mb-1.5 block">Amount (Rp)</label>
-                <input type="number" name="nominal" value={formData.nominal} onChange={onInputChange} placeholder="20000" className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                <input type="number" name="nominal" value={formData.nominal} onChange={onInputChange} placeholder="20000" min="0" className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors" />
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase mb-1.5 block">Date</label>
-                <input type="date" name="tanggal" value={formData.tanggal} onChange={onInputChange} className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-4 py-2.5 text-slate-300 focus:outline-none focus:border-blue-500 transition-colors" />
+                <input type="date" name="tanggal" value={formData.tanggal} onChange={onInputChange} max={new Date().toISOString().split('T')[0]} className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-4 py-2.5 text-slate-300 focus:outline-none focus:border-blue-500 transition-colors" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

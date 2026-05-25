@@ -93,18 +93,19 @@ export default function Sidebar({ userName, currentPage }: SidebarProps) {
 
       {/* Mobile drawer */}
       <aside
-        className={`md:hidden fixed top-0 left-0 h-full w-64 bg-[#0f172a] border-r border-slate-800 p-6 z-50 transition-transform duration-200 ${
+        className={`md:hidden fixed top-0 left-0 h-full w-64 bg-[#0f172a] border-r border-slate-800 p-6 z-50 transition-transform duration-200 overflow-y-auto ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <button
           onClick={() => setMobileOpen(false)}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white"
+          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors z-50"
           aria-label="Close menu"
+          title="Close menu"
         >
-          <X size={20} />
+          <X size={24} />
         </button>
-        {sidebarContent}
+        <div className="pr-6 pt-6">{sidebarContent}</div>
       </aside>
 
       {/* Desktop sidebar */}
