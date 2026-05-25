@@ -219,35 +219,20 @@ export default function AnalyticsPage() {
             <p className="text-slate-400 text-xs mt-0.5 mb-6">Breakdown of spending by category.</p>
             <div className="flex-1 w-full flex items-center justify-center overflow-visible">
               {metrics.pieChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                    data={metrics.expenseByCategory}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={true}
-                    outerRadius={100} 
-                    dataKey="value"
-                    label={({ name, percent }) => {
-                      if (percent === 0) return null;
-                      return `${name} ${(percent * 100).toFixed(1)}%`;
-                    }}
-                    > 
-                    {metrics.expenseByCategory.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value) => formatRupiah(value)}
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px' }}
-                    itemStyle={{ color: '#e2e8f0' }}
-                    />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    align="center"
-                    iconType="circle"
-                    wrapperStyle={{ paddingTop: '20px' }}
-                    />
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 50, right: 10, bottom: 20, left: 10 }}>
+                    <Pie data={metrics.pieChartData} cx="50%" cy="45%" innerRadius={70} outerRadius={105}
+                      paddingAngle={5} dataKey="value" stroke="none"
+                      label={({ percent }) => `${(percent * 100).toFixed(1)}%`} labelLine={false}>
+                      {metrics.pieChartData.map((_, index) => (
+                        <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => formatRupiah(value)}
+                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
+                      itemStyle={{ color: '#cbd5e1' }} />
+                    <Legend iconType="circle" layout="vertical" verticalAlign="middle" align="right"
+                      wrapperStyle={{ fontSize: '12px', color: '#94a3b8' }} />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
